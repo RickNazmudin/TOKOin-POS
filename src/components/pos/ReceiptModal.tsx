@@ -39,6 +39,7 @@ interface ReceiptModalProps {
   isOpen: boolean;
   transaction: TransactionData | null;
   storeSettings?: StoreSettingsData | null;
+  autoPrint?: boolean;
   onNewTransaction: () => void;
 }
 
@@ -46,6 +47,7 @@ export default function ReceiptModal({
   isOpen,
   transaction,
   storeSettings,
+  autoPrint = false,
   onNewTransaction,
 }: ReceiptModalProps) {
   useEffect(() => {
@@ -58,6 +60,16 @@ export default function ReceiptModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onNewTransaction]);
+
+  // Auto-trigger print dialog if requested
+  useEffect(() => {
+    if (isOpen && autoPrint && transaction) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoPrint, transaction]);
 
   if (!isOpen || !transaction) return null;
 

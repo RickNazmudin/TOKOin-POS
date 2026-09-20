@@ -30,55 +30,61 @@ export async function adjustStock(payload: StockAdjustmentPayload) {
   }
 
   try {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const product = await tx.product.findUnique({
-        where: { id: productId },
-      });
+    const result = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+        });
 
-      if (!product) {
-        throw new Error("Produk tidak ditemukan.");
-      }
-
-      const stockBefore = product.stock;
-      let stockAfter = stockBefore;
-      let movementType = "";
-
-      if (type === "ADD") {
-        stockAfter = stockBefore + quantity;
-        movementType = reason === "Restock" ? "RESTOCK" : "ADJUSTMENT_ADD";
-      } else {
-        if (stockBefore < quantity) {
-          throw new Error(
-            `Pengurangan gagal: Stok fisik saat ini (${stockBefore}) lebih kecil dari jumlah yang ingin dikurangi (${quantity}).`
-          );
+        if (!product) {
+          throw new Error("Produk tidak ditemukan.");
         }
-        stockAfter = stockBefore - quantity;
-        movementType = "ADJUSTMENT_REMOVE";
+
+        const stockBefore = product.stock;
+        let stockAfter = stockBefore;
+        let movementType = "";
+
+        if (type === "ADD") {
+          stockAfter = stockBefore + quantity;
+          movementType = reason === "Restock" ? "RESTOCK" : "ADJUSTMENT_ADD";
+        } else {
+          if (stockBefore < quantity) {
+            throw new Error(
+              `Pengurangan gagal: Stok fisik saat ini (${stockBefore}) lebih kecil dari jumlah yang ingin dikurangi (${quantity}).`
+            );
+          }
+          stockAfter = stockBefore - quantity;
+          movementType = "ADJUSTMENT_REMOVE";
+        }
+
+        // Update product stock
+        const updatedProduct = await tx.product.update({
+          where: { id: productId },
+          data: { stock: stockAfter },
+        });
+
+        // Record in StockMovement
+        const reasonLabel = notes ? `${reason}: ${notes}` : reason;
+        const movement = await tx.stockMovement.create({
+          data: {
+            productId,
+            userId: user.id,
+            type: movementType,
+            quantity: type === "ADD" ? quantity : -quantity,
+            stockBefore,
+            stockAfter,
+            referenceType: "MANUAL_ADJUSTMENT",
+            reason: reasonLabel,
+          },
+        });
+
+        return { updatedProduct, movement };
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
       }
-
-      // Update product stock
-      const updatedProduct = await tx.product.update({
-        where: { id: productId },
-        data: { stock: stockAfter },
-      });
-
-      // Record in StockMovement
-      const reasonLabel = notes ? `${reason}: ${notes}` : reason;
-      const movement = await tx.stockMovement.create({
-        data: {
-          productId,
-          userId: user.id,
-          type: movementType,
-          quantity: type === "ADD" ? quantity : -quantity,
-          stockBefore,
-          stockAfter,
-          referenceType: "MANUAL_ADJUSTMENT",
-          reason: reasonLabel,
-        },
-      });
-
-      return { updatedProduct, movement };
-    });
+    );
 
     revalidatePath("/admin/inventory");
     revalidatePath("/admin/products");

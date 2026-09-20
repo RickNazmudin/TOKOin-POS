@@ -54,89 +54,94 @@ export async function processPosTransaction(payload: CheckoutPayload) {
   const calculatedChange = paymentMethod === "CASH" ? paidAmount - calculatedTotal : 0;
 
   try {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 2. Validate real-time stock for each product
-      for (const item of items) {
-        const prod = await tx.product.findUnique({
-          where: { id: item.productId },
+    const result = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        // 2. Validate real-time stock for all products in a single query
+        const productIds = items.map((i) => i.productId);
+        const products = await tx.product.findMany({
+          where: { id: { in: productIds } },
         });
+        const productMap = new Map(products.map((p) => [p.id, p]));
 
-        if (!prod || prod.status !== "ACTIVE") {
-          throw new Error(`Produk "${item.name}" tidak ditemukan atau sudah dinonaktifkan.`);
+        for (const item of items) {
+          const prod = productMap.get(item.productId);
+
+          if (!prod || prod.status !== "ACTIVE") {
+            throw new Error(`Produk "${item.name}" tidak ditemukan atau sudah dinonaktifkan.`);
+          }
+
+          if (prod.stock < item.quantity) {
+            throw new Error(
+              `Stok "${prod.name}" tidak mencukupi! Sisa stok tersedia: ${prod.stock}, diminta: ${item.quantity}`
+            );
+          }
         }
 
-        if (prod.stock < item.quantity) {
-          throw new Error(
-            `Stok "${prod.name}" tidak mencukupi! Sisa stok tersedia: ${prod.stock}, diminta: ${item.quantity}`
-          );
-        }
-      }
+        // 3. Generate Sequential Invoice Number (INV-YYYYMMDD-XXXX)
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const date = String(now.getDate()).padStart(2, "0");
+        const datePrefix = `INV-${year}${month}${date}`;
 
-      // 3. Generate Sequential Invoice Number (INV-YYYYMMDD-XXXX)
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, "0");
-      const date = String(now.getDate()).padStart(2, "0");
-      const datePrefix = `INV-${year}${month}${date}`;
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-      const countToday = await tx.transaction.count({
-        where: {
-          createdAt: {
-            gte: todayStart,
-            lte: todayEnd,
+        const countToday = await tx.transaction.count({
+          where: {
+            createdAt: {
+              gte: todayStart,
+              lte: todayEnd,
+            },
           },
-        },
-      });
-
-      const sequence = String(countToday + 1).padStart(4, "0");
-      const invoiceNumber = `${datePrefix}-${sequence}`;
-
-      // 4. Create Transaction Record
-      const transaction = await tx.transaction.create({
-        data: {
-          invoiceNumber,
-          cashierId: user.id,
-          subtotal: calculatedSubtotal,
-          discount: safeDiscount,
-          total: calculatedTotal,
-          paymentMethod,
-          paidAmount: paymentMethod === "QRIS" ? calculatedTotal : paidAmount,
-          changeAmount: calculatedChange,
-          status: "COMPLETED",
-          items: {
-            create: items.map((i) => ({
-              productId: i.productId,
-              productName: i.name,
-              price: i.price,
-              quantity: i.quantity,
-              subtotal: i.price * i.quantity,
-            })),
-          },
-        },
-        include: {
-          cashier: true,
-          items: true,
-        },
-      });
-
-      // 5. Deduct Product Stocks & Record Stock Movements
-      for (const item of items) {
-        const prod = await tx.product.findUnique({
-          where: { id: item.productId },
         });
 
-        if (prod) {
+        const sequence = String(countToday + 1).padStart(4, "0");
+        const invoiceNumber = `${datePrefix}-${sequence}`;
+
+        // 4. Create Transaction Record
+        const transaction = await tx.transaction.create({
+          data: {
+            invoiceNumber,
+            cashierId: user.id,
+            subtotal: calculatedSubtotal,
+            discount: safeDiscount,
+            total: calculatedTotal,
+            paymentMethod,
+            paidAmount: paymentMethod === "QRIS" ? calculatedTotal : paidAmount,
+            changeAmount: calculatedChange,
+            status: "COMPLETED",
+            items: {
+              create: items.map((i) => ({
+                productId: i.productId,
+                productName: i.name,
+                price: i.price,
+                quantity: i.quantity,
+                subtotal: i.price * i.quantity,
+              })),
+            },
+          },
+          include: {
+            cashier: true,
+            items: true,
+          },
+        });
+
+        // 5. Deduct Product Stocks & Record Stock Movements
+        for (const item of items) {
+          const prod = productMap.get(item.productId)!;
           const newStock = prod.stock - item.quantity;
           await tx.product.update({
             where: { id: item.productId },
             data: { stock: newStock },
           });
+        }
 
-          await tx.stockMovement.create({
-            data: {
+        await tx.stockMovement.createMany({
+          data: items.map((item) => {
+            const prod = productMap.get(item.productId)!;
+            const newStock = prod.stock - item.quantity;
+            return {
               productId: item.productId,
               userId: user.id,
               type: "SALE",
@@ -146,13 +151,17 @@ export async function processPosTransaction(payload: CheckoutPayload) {
               referenceType: "TRANSACTION",
               referenceId: transaction.id,
               reason: `Penjualan kasir via ${invoiceNumber}`,
-            },
-          });
-        }
-      }
+            };
+          }),
+        });
 
-      return transaction;
-    });
+        return transaction;
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      }
+    );
 
     // Revalidate paths so dashboard and stock reflect immediate changes
     revalidatePath("/admin/dashboard");

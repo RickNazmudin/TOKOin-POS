@@ -88,37 +88,43 @@ export async function createProduct(formData: FormData) {
   }
 
   try {
-    const product = await prisma.$transaction(async (tx) => {
-      const newProd = await tx.product.create({
-        data: {
-          name,
-          categoryId,
-          sku,
-          costPrice,
-          sellingPrice,
-          stock,
-          minimumStock,
-          status: "ACTIVE",
-        },
-      });
-
-      if (stock > 0) {
-        await tx.stockMovement.create({
+    const product = await prisma.$transaction(
+      async (tx) => {
+        const newProd = await tx.product.create({
           data: {
-            productId: newProd.id,
-            userId: user.id,
-            type: "RESTOCK",
-            quantity: stock,
-            stockBefore: 0,
-            stockAfter: stock,
-            referenceType: "MANUAL_ADJUSTMENT",
-            reason: "Stok awal pembuatan produk baru",
+            name,
+            categoryId,
+            sku,
+            costPrice,
+            sellingPrice,
+            stock,
+            minimumStock,
+            status: "ACTIVE",
           },
         });
-      }
 
-      return newProd;
-    });
+        if (stock > 0) {
+          await tx.stockMovement.create({
+            data: {
+              productId: newProd.id,
+              userId: user.id,
+              type: "RESTOCK",
+              quantity: stock,
+              stockBefore: 0,
+              stockAfter: stock,
+              referenceType: "MANUAL_ADJUSTMENT",
+              reason: "Stok awal pembuatan produk baru",
+            },
+          });
+        }
+
+        return newProd;
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
+      }
+    );
 
     revalidatePath("/admin/products");
     revalidatePath("/admin/inventory");

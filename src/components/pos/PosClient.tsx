@@ -82,6 +82,7 @@ export default function PosClient({
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(
     initialStoreSettings || null
   );
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState<boolean>(true);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -225,7 +226,8 @@ export default function PosClient({
   // Process checkout
   const handleConfirmPayment = async (
     paymentMethod: "CASH" | "QRIS",
-    paidAmount: number
+    paidAmount: number,
+    shouldPrint: boolean = true
   ) => {
     setIsProcessing(true);
     setErrorMsg(null);
@@ -241,6 +243,7 @@ export default function PosClient({
 
     if (res.success && res.transaction) {
       setLastTransaction(res.transaction);
+      setAutoPrintReceipt(shouldPrint);
       if (res.storeSettings) setStoreSettings(res.storeSettings);
       setIsCheckoutOpen(false);
       setIsReceiptOpen(true);
@@ -581,6 +584,7 @@ export default function PosClient({
         isOpen={isReceiptOpen}
         transaction={lastTransaction}
         storeSettings={storeSettings}
+        autoPrint={autoPrintReceipt}
         onNewTransaction={() => {
           setIsReceiptOpen(false);
           setLastTransaction(null);
