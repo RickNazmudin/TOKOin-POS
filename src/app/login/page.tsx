@@ -5,8 +5,6 @@ import { loginServerAction } from "@/app/actions/auth";
 import {
   Store,
   UserCheck,
-  ShieldCheck,
-  ShoppingCart,
   Lock,
   User,
   Eye,
@@ -18,11 +16,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
-  const fillQuickLogin = (user: string, pass: string) => {
-    setUsername(user);
-    setPassword(pass);
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 p-4 sm:p-6">
@@ -75,7 +68,7 @@ export default function LoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Contoh: admin atau kasir"
+                  placeholder="Masukkan nama pengguna"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -137,31 +130,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Fill Helper */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs font-medium text-slate-500 text-center mb-3">
-              Akses Cepat Demo Akun:
-            </p>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => fillQuickLogin("admin", "admin123")}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Pemilik (Admin)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => fillQuickLogin("kasir", "kasir123")}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 transition cursor-pointer"
-              >
-                <ShoppingCart className="w-3.5 h-3.5 text-blue-600" />
-                <span>Kasir (POS)</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer info */}
