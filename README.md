@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TOKOin - Aplikasi POS (Point of Sale) & Kasir Warung Pintar
 
-## Getting Started
+**TOKOin** adalah aplikasi kasir modern (Point of Sale) yang dirancang khusus untuk operasional warung, toko kelontong, dan UMKM retail. Dibangun dengan performa cepat, antarmuka responsif (desktop & mobile smartphone), dan fitur manajemen lengkap.
 
-First, run the development server:
+---
 
+## ✨ Fitur Utama
+
+- 🛒 **Mesin Kasir (POS)**: Scan barcode / SKU, pencarian instan, kalkulasi kembalian otomatis, diskon belanja, cetak struk belanja, dan dukungan pembayaran Tunai & QRIS.
+- 📊 **Dasbor Pemilik**: Statistik omset harian/bulanan, estimasi profit bersih, total transaksi, dan notifikasi stok menipis.
+- 📦 **Produk & Kategori**: Manajemen produk, harga modal, harga jual, stok minimum, dan pengelolaan kategori.
+- 🔄 **Stok & Mutasi**: Pencatatan mutasi stok otomatis (penjualan, restock, opname/penyesuaian stok).
+- 🧾 **Riwayat Transaksi**: Detail riwayat transaksi, cetak ulang nota, serta pembatalan transaksi dengan pengembalian stok otomatis.
+- 📈 **Laporan Penjualan**: Filter periode penjualan, laba kotor, dan ekspor/cetak laporan.
+- 👥 **Kelola Kasir & Pengaturan Toko**: Manajemen hak akses kasir dan kustomisasi profil toko/struk.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: Next.js 16 (App Router & Server Actions)
+- **Database**: SQLite dengan Prisma ORM
+- **Styling**: Tailwind CSS & Lucide Icons
+- **Autentikasi**: JWT (Jose) & Bcrypt
+
+---
+
+## 🚀 Panduan Memulai
+
+### 1. Kloning Repository
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/RickNazmudin/TOKOin-POS.git
+cd TOKOin-POS
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Instal Dependensi
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Konfigurasi Environment
+Salin file `.env.example` ke `.env`:
+```bash
+cp .env.example .env
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Setup Database & Inisialisasi Data
+Jalankan migrasi Prisma dan seed data awal:
+```bash
+npx prisma db push
+npx prisma db seed
+```
 
-## Learn More
+### 5. Jalankan Server Pengembangan
+```bash
+npm run dev
+```
+Buka browser di `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🔑 Akun Default (Demo)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Role | Username | Password | Akses |
+| :--- | :--- | :--- | :--- |
+| **Pemilik / Admin** | `admin` | `admin123` | Akses Penuh (Dasbor, Laporan, Stok, Kasir, Pengaturan) |
+| **Kasir** | `kasir` | `kasir123` | Akses Kasir POS & Riwayat Transaksi Kasir |
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 Lisensi
+Didistribusikan di bawah lisensi MIT.

@@ -1,0 +1,119 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String
+  username       String          @unique
+  email          String?
+  password       String
+  role           String          @default("CASHIER") // "ADMIN" | "CASHIER"
+  status         String          @default("ACTIVE")  // "ACTIVE" | "INACTIVE"
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  transactions   Transaction[]
+  stockMovements StockMovement[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  status    String    @default("ACTIVE") // "ACTIVE" | "INACTIVE"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  categoryId       String
+  category         Category          @relation(fields: [categoryId], references: [id])
+  name             String
+  sku              String?           @unique
+  costPrice        Float             @default(0)
+  sellingPrice     Float             @default(0)
+  stock            Int               @default(0)
+  minimumStock     Int               @default(5)
+  status           String            @default("ACTIVE") // "ACTIVE" | "INACTIVE"
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  transactionItems TransactionItem[]
+  stockMovements   StockMovement[]
+
+  @@map("products")
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  invoiceNumber String            @unique
+  cashierId     String
+  cashier       User              @relation(fields: [cashierId], references: [id])
+  subtotal      Float             @default(0)
+  discount      Float             @default(0)
+  total         Float             @default(0)
+  paymentMethod String            @default("CASH") // "CASH" | "QRIS"
+  paidAmount    Float             @default(0)
+  changeAmount  Float             @default(0)
+  status        String            @default("COMPLETED") // "COMPLETED" | "CANCELLED"
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  items         TransactionItem[]
+
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id            String       @id @default(cuid())
+  transactionId String
+  transaction   Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName   String
+  quantity      Int          @default(1)
+  price         Float        @default(0)
+  subtotal      Float        @default(0)
+  createdAt     DateTime     @default(now())
+
+  @@map("transaction_items")
+}
+
+model StockMovement {
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  type          String   // "SALE", "RESTOCK", "ADJUSTMENT_ADD", "ADJUSTMENT_REMOVE"
+  quantity      Int
+  stockBefore   Int
+  stockAfter    Int
+  referenceType String?  // "TRANSACTION", "MANUAL_ADJUSTMENT"
+  referenceId   String?
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@map("stock_movements")
+}
+
+model StoreSettings {
+  id            String   @id @default("default_store")
+  storeName     String   @default("TOKOin Warung Pintar")
+  logo          String?
+  address       String?  @default("Jl. Niaga Raya No. 88, UMKM Central")
+  phone         String?  @default("0812-3456-7890")
+  receiptFooter String?  @default("Terima kasih telah berbelanja di TOKOin!")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("store_settings")
+}

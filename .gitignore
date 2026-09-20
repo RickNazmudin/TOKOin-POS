@@ -20,22 +20,39 @@
 # production
 /build
 
-# misc
+# database (SQLite)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/prisma/*.db
+/prisma/*.db-journal
+
+# misc & OS
 .DS_Store
 *.pem
+Thumbs.db
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
-# vercel
+# vercel & ide
 .vercel
+.vscode/
+.idea/
+.agents/
+.gemini/
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Documentation / Internal PRD
+PRDtokoin.md
