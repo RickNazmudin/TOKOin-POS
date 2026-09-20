@@ -1,0 +1,7 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[functions]
+  # Menyelaraskan region Serverless Function ke Singapura (ap-southeast-1) agar sama dengan lokasi TiDB Cloud
+  region = "ap-southeast-1"
