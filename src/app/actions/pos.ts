@@ -96,8 +96,22 @@ export async function processPosTransaction(payload: CheckoutPayload) {
           },
         });
 
-        const sequence = String(countToday + 1).padStart(4, "0");
-        const invoiceNumber = `${datePrefix}-${sequence}`;
+        let sequence = countToday + 1;
+        let invoiceNumber = `${datePrefix}-${String(sequence).padStart(4, "0")}`;
+
+        // Ensure absolute uniqueness in concurrent checkout situations
+        let existingInvoice = await tx.transaction.findUnique({
+          where: { invoiceNumber },
+          select: { id: true },
+        });
+        while (existingInvoice) {
+          sequence += 1;
+          invoiceNumber = `${datePrefix}-${String(sequence).padStart(4, "0")}`;
+          existingInvoice = await tx.transaction.findUnique({
+            where: { invoiceNumber },
+            select: { id: true },
+          });
+        }
 
         // 4. Create Transaction Record
         const transaction = await tx.transaction.create({

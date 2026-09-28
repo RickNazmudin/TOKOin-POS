@@ -46,7 +46,11 @@ export async function getSalesReportData(filter: SalesReportFilter) {
       cashier: true,
       items: {
         include: {
-          product: true,
+          product: {
+            include: {
+              category: true,
+            },
+          },
         },
       },
     },
@@ -108,7 +112,7 @@ export async function getSalesReportData(filter: SalesReportFilter) {
       if (!productSalesMap[pKey]) {
         productSalesMap[pKey] = {
           name: item.productName,
-          categoryName: item.product?.categoryId ? "Barang Warung" : "Umum",
+          categoryName: item.product?.category?.name || "Umum",
           quantity: 0,
           revenue: 0,
           profit: 0,
