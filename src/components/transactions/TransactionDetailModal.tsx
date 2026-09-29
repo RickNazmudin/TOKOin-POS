@@ -262,20 +262,44 @@ export default function TransactionDetailModal({
                     {formatRupiah(transaction.total)}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-600 pt-1">
-                  <span>Metode Pembayaran</span>
-                  <span className="font-bold uppercase">
-                    {transaction.paymentMethod === "CASH" ? "Tunai (Cash)" : "QRIS"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Diterima / Bayar</span>
-                  <span>{formatRupiah(transaction.paidAmount)}</span>
-                </div>
-                <div className="flex justify-between text-slate-900 font-bold">
-                  <span>Kembalian</span>
-                  <span>{formatRupiah(transaction.changeAmount)}</span>
-                </div>
+                {transaction.paymentMethod === "DEBT" ? (
+                  <>
+                    <div className="flex justify-between text-amber-900 font-bold pt-1">
+                      <span>Metode Pembayaran</span>
+                      <span className="uppercase">KASBON / HUTANG</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Uang Muka (DP)</span>
+                      <span>{formatRupiah(transaction.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-900 font-black pt-1 border-t border-dashed border-slate-200">
+                      <span>SISA HUTANG NOTA</span>
+                      <span>
+                        {formatRupiah(
+                          (transaction as any).debtRemaining ??
+                            transaction.total - transaction.paidAmount
+                        )}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-slate-600 pt-1">
+                      <span>Metode Pembayaran</span>
+                      <span className="font-bold uppercase">
+                        {transaction.paymentMethod === "CASH" ? "Tunai (Cash)" : "QRIS"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Diterima / Bayar</span>
+                      <span>{formatRupiah(transaction.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-900 font-bold">
+                      <span>Kembalian</span>
+                      <span>{formatRupiah(transaction.changeAmount)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Footer */}

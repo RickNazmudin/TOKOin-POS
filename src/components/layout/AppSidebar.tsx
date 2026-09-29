@@ -12,6 +12,7 @@ import {
   BarChart3,
   Users,
   Settings,
+  BookOpen,
 } from "lucide-react";
 
 interface AppSidebarProps {
@@ -33,6 +34,11 @@ export default function AppSidebar({ user }: AppSidebarProps) {
       href: "/pos",
       icon: ShoppingCart,
       highlight: true,
+    },
+    {
+      label: "Buku Kasbon / Piutang",
+      href: "/admin/debts",
+      icon: BookOpen,
     },
     {
       label: "Produk & Kategori",
@@ -74,6 +80,11 @@ export default function AppSidebar({ user }: AppSidebarProps) {
       highlight: true,
     },
     {
+      label: "Buku Kasbon / Piutang",
+      href: "/cashier/debts",
+      icon: BookOpen,
+    },
+    {
       label: "Riwayat Transaksi",
       href: "/cashier/transactions",
       icon: ReceiptText,
@@ -97,30 +108,30 @@ export default function AppSidebar({ user }: AppSidebarProps) {
           <nav className="space-y-1">
             {items.map((item) => {
               const Icon = item.icon;
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/admin/dashboard" &&
-                  item.href !== "/pos" &&
-                  pathname.startsWith(item.href));
+              const isActive = pathname === item.href;
 
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 ${
                     isActive
                       ? item.highlight
                         ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                        : "bg-emerald-50 text-emerald-700 font-bold border border-emerald-200/60"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                        : "bg-emerald-50 text-emerald-800"
+                      : item.highlight
+                      ? "bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 font-bold border border-emerald-500/20"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                   }`}
                 >
                   <Icon
-                    className={`w-5 h-5 ${
+                    className={`w-5 h-5 shrink-0 ${
                       isActive
                         ? item.highlight
                           ? "text-white"
-                          : "text-emerald-600"
+                          : "text-emerald-700"
+                        : item.highlight
+                        ? "text-emerald-600"
                         : "text-slate-400"
                     }`}
                   />
@@ -132,21 +143,10 @@ export default function AppSidebar({ user }: AppSidebarProps) {
         </div>
       </div>
 
-      {/* Role Badge Footer */}
-      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
-            {user.name.charAt(0)}
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-xs font-bold text-slate-800 truncate">
-              {user.name}
-            </p>
-            <p className="text-[11px] text-slate-500 font-medium">
-              {isAdmin ? "Akses Penuh Pemilik" : "Akses Kasir POS"}
-            </p>
-          </div>
-        </div>
+      {/* Footer Info Box */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 text-xs text-slate-500">
+        <p className="font-bold text-slate-700">TOKOin POS Pintar</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">Versi 1.2.0 • UMKM</p>
       </div>
     </aside>
   );

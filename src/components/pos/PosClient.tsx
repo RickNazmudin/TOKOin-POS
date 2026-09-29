@@ -41,10 +41,18 @@ interface StoreSettings {
   receiptFooter?: string | null;
 }
 
+interface CustomerOption {
+  id: string;
+  name: string;
+  phone?: string | null;
+  totalDebt: number;
+}
+
 interface PosClientProps {
   products: Product[];
   categories: Category[];
   storeSettings?: StoreSettings | null;
+  customers?: CustomerOption[];
   cashierName: string;
 }
 
@@ -52,6 +60,7 @@ export default function PosClient({
   products: initialProducts,
   categories,
   storeSettings: initialStoreSettings,
+  customers = [],
   cashierName,
 }: PosClientProps) {
   const [search, setSearch] = useState("");
@@ -73,6 +82,9 @@ export default function PosClient({
     paymentMethod: string;
     paidAmount: number;
     changeAmount: number;
+    customerName?: string | null;
+    debtRemaining?: number;
+    totalCustomerDebt?: number;
     cashier: { name: string };
     items: {
       id?: string;
@@ -228,9 +240,14 @@ export default function PosClient({
 
   // Process checkout
   const handleConfirmPayment = async (
-    paymentMethod: "CASH" | "QRIS",
+    paymentMethod: "CASH" | "QRIS" | "DEBT",
     paidAmount: number,
-    shouldPrint: boolean = true
+    shouldPrint: boolean = true,
+    debtDetails?: {
+      customerId?: string | null;
+      newCustomerName?: string | null;
+      newCustomerPhone?: string | null;
+    }
   ) => {
     setIsProcessing(true);
     setErrorMsg(null);
@@ -240,12 +257,15 @@ export default function PosClient({
       discount: safeDiscount,
       paymentMethod,
       paidAmount,
+      customerId: debtDetails?.customerId,
+      newCustomerName: debtDetails?.newCustomerName,
+      newCustomerPhone: debtDetails?.newCustomerPhone,
     });
 
     setIsProcessing(false);
 
     if (res.success && res.transaction) {
-      setLastTransaction(res.transaction);
+      setLastTransaction(res.transaction as any);
       setAutoPrintReceipt(shouldPrint);
       if (res.storeSettings) setStoreSettings(res.storeSettings);
       setIsCheckoutOpen(false);
@@ -582,6 +602,7 @@ export default function PosClient({
         onClose={() => setIsCheckoutOpen(false)}
         total={total}
         itemCount={totalItemCount}
+        customers={customers}
         onConfirmPayment={handleConfirmPayment}
         isProcessing={isProcessing}
       />

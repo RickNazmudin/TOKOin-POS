@@ -7,6 +7,7 @@ export default async function AdminTransactionsPage() {
     prisma.transaction.findMany({
       include: {
         cashier: true,
+        customer: true,
         items: true,
       },
       orderBy: { createdAt: "desc" },

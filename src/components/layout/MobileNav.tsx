@@ -10,6 +10,7 @@ import {
   Boxes,
   ReceiptText,
   BarChart3,
+  BookOpen,
 } from "lucide-react";
 
 interface MobileNavProps {
@@ -23,14 +24,15 @@ export default function MobileNav({ user }: MobileNavProps) {
   const adminItems = [
     { label: "Dasbor", href: "/admin/dashboard", icon: LayoutDashboard },
     { label: "Kasir", href: "/pos", icon: ShoppingCart },
+    { label: "Kasbon", href: "/admin/debts", icon: BookOpen },
     { label: "Produk", href: "/admin/products", icon: Package },
-    { label: "Stok", href: "/admin/inventory", icon: Boxes },
     { label: "Transaksi", href: "/admin/transactions", icon: ReceiptText },
     { label: "Laporan", href: "/admin/reports", icon: BarChart3 },
   ];
 
   const cashierItems = [
-    { label: "Kasir (POS)", href: "/pos", icon: ShoppingCart },
+    { label: "Kasir", href: "/pos", icon: ShoppingCart },
+    { label: "Kasbon", href: "/cashier/debts", icon: BookOpen },
     { label: "Transaksi", href: "/cashier/transactions", icon: ReceiptText },
     { label: "Produk", href: "/cashier/products", icon: Package },
   ];

@@ -14,6 +14,7 @@ export default async function CashierTransactionsPage() {
       },
       include: {
         cashier: true,
+        customer: true,
         items: true,
       },
       orderBy: { createdAt: "desc" },

@@ -3,7 +3,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 
 export interface StockAdjustmentPayload {
   productId: string;
@@ -31,7 +30,7 @@ export async function adjustStock(payload: StockAdjustmentPayload) {
 
   try {
     const result = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
+      async (tx: any) => {
         const product = await tx.product.findUnique({
           where: { id: productId },
         });

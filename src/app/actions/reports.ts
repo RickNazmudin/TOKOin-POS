@@ -2,10 +2,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { Prisma } from "@prisma/client";
 
 export interface SalesReportFilter {
   period: "TODAY" | "YESTERDAY" | "7_DAYS" | "30_DAYS" | "ALL";
+  paymentMethod?: "ALL" | "CASH" | "QRIS" | "DEBT";
 }
 
 export async function getSalesReportData(filter: SalesReportFilter) {
@@ -29,9 +29,13 @@ export async function getSalesReportData(filter: SalesReportFilter) {
     startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
 
-  const whereCondition: Prisma.TransactionWhereInput = {
-    status: "COMPLETED",
+  const whereCondition: any = {
+    status: { not: "CANCELLED" },
   };
+
+  if (filter.paymentMethod && filter.paymentMethod !== "ALL") {
+    whereCondition.paymentMethod = filter.paymentMethod;
+  }
 
   if (startDate && endDate) {
     whereCondition.createdAt = { gte: startDate, lte: endDate };
@@ -39,23 +43,42 @@ export async function getSalesReportData(filter: SalesReportFilter) {
     whereCondition.createdAt = { gte: startDate };
   }
 
-  // Fetch transactions in period
-  const transactions = await prisma.transaction.findMany({
-    where: whereCondition,
-    include: {
-      cashier: true,
-      items: {
-        include: {
-          product: {
-            include: {
-              category: true,
+  // Debt payment filter condition for the same period
+  const paymentWhereCondition: any = {};
+  if (startDate && endDate) {
+    paymentWhereCondition.createdAt = { gte: startDate, lte: endDate };
+  } else if (startDate) {
+    paymentWhereCondition.createdAt = { gte: startDate };
+  }
+
+  // Fetch transactions and debt payments concurrently
+  const [transactions, debtPayments] = await Promise.all([
+    prisma.transaction.findMany({
+      where: whereCondition,
+      include: {
+        cashier: true,
+        customer: true,
+        items: {
+          include: {
+            product: {
+              include: {
+                category: true,
+              },
             },
           },
         },
       },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.debtPayment.findMany({
+      where: paymentWhereCondition,
+      include: {
+        cashier: { select: { name: true } },
+        customer: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   // Calculate Metrics
   let totalRevenue = 0;
@@ -63,13 +86,38 @@ export async function getSalesReportData(filter: SalesReportFilter) {
   let totalDiscount = 0;
   let totalItemsSold = 0;
 
-  const productSalesMap: Record<string, { name: string; categoryName: string; quantity: number; revenue: number; profit: number }> = {};
-  const cashierSalesMap: Record<string, { name: string; transactionCount: number; revenue: number }> = {};
-  const dailyChartMap: Record<string, { date: string; revenue: number; count: number; profit: number }> = {};
+  let cashRevenue = 0;
+  let qrisRevenue = 0;
+  let debtSalesTotal = 0;
+  let debtDownPaymentTotal = 0;
+  let unpaidDebtInPeriod = 0;
+
+  const productSalesMap: Record<
+    string,
+    { name: string; categoryName: string; quantity: number; revenue: number; profit: number }
+  > = {};
+  const cashierSalesMap: Record<
+    string,
+    { name: string; transactionCount: number; revenue: number }
+  > = {};
+  const dailyChartMap: Record<
+    string,
+    { date: string; revenue: number; count: number; profit: number; cashInflow: number }
+  > = {};
 
   for (const tx of transactions) {
     totalRevenue += tx.total;
     totalDiscount += tx.discount;
+
+    if (tx.paymentMethod === "CASH") {
+      cashRevenue += tx.total;
+    } else if (tx.paymentMethod === "QRIS") {
+      qrisRevenue += tx.total;
+    } else if (tx.paymentMethod === "DEBT") {
+      debtSalesTotal += tx.total;
+      debtDownPaymentTotal += tx.paidAmount;
+      unpaidDebtInPeriod += tx.debtRemaining;
+    }
 
     // Cashier breakdown
     if (!cashierSalesMap[tx.cashierId]) {
@@ -94,10 +142,14 @@ export async function getSalesReportData(filter: SalesReportFilter) {
         revenue: 0,
         count: 0,
         profit: 0,
+        cashInflow: 0,
       };
     }
     dailyChartMap[dayKey].revenue += tx.total;
     dailyChartMap[dayKey].count += 1;
+
+    const instantNonDebtPaid = tx.paymentMethod === "DEBT" ? 0 : tx.total;
+    dailyChartMap[dayKey].cashInflow += instantNonDebtPaid;
 
     // Items and profit calculation
     for (const item of tx.items) {
@@ -124,6 +176,29 @@ export async function getSalesReportData(filter: SalesReportFilter) {
     }
   }
 
+  // Add Debt Payments into daily cashInflow chart
+  for (const dp of debtPayments) {
+    const dpKey = new Date(dp.createdAt).toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+    });
+    if (!dailyChartMap[dpKey]) {
+      dailyChartMap[dpKey] = {
+        date: dpKey,
+        revenue: 0,
+        count: 0,
+        profit: 0,
+        cashInflow: 0,
+      };
+    }
+    dailyChartMap[dpKey].cashInflow += dp.amount;
+  }
+
+  // Calculate Debt Payments collected in this period (contains both DP and installments)
+  const totalDebtPaymentsCollected = debtPayments.reduce((acc, p) => acc + p.amount, 0);
+
+  // Total Real Cash Inflow = (Cash sales + QRIS sales + all Debt Payments / DP received)
+  const totalCashInflow = cashRevenue + qrisRevenue + totalDebtPaymentsCollected;
   const grossProfit = totalRevenue - totalCost;
   const transactionCount = transactions.length;
   const averageOrderValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
@@ -144,14 +219,24 @@ export async function getSalesReportData(filter: SalesReportFilter) {
   return {
     metrics: {
       totalRevenue,
+      totalCashInflow,
       grossProfit,
       totalDiscount,
       totalItemsSold,
       transactionCount,
       averageOrderValue,
+      breakdown: {
+        cashRevenue,
+        qrisRevenue,
+        debtSalesTotal,
+        debtDownPaymentTotal,
+        unpaidDebtInPeriod,
+        totalDebtPaymentsCollected,
+      },
     },
     chartData,
     bestSellers,
     cashierPerformance,
+    recentDebtPayments: debtPayments.slice(0, 5),
   };
 }

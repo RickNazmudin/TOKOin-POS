@@ -13,6 +13,7 @@ import {
   Usb,
   Settings,
   RefreshCw,
+  BookOpen,
 } from "lucide-react";
 
 interface ReceiptItem {
@@ -33,6 +34,9 @@ interface TransactionData {
   paymentMethod: string;
   paidAmount: number;
   changeAmount: number;
+  customerName?: string | null;
+  debtRemaining?: number;
+  totalCustomerDebt?: number;
   cashier: {
     name: string;
   };
@@ -102,6 +106,9 @@ export default function ReceiptModal({
       paidAmount: transaction.paidAmount,
       changeAmount: transaction.changeAmount,
       cashierName: transaction.cashier.name,
+      customerName: transaction.customerName || undefined,
+      debtRemaining: transaction.debtRemaining,
+      totalCustomerDebt: transaction.totalCustomerDebt,
       items: transaction.items.map((it) => ({
         productName: it.productName,
         quantity: it.quantity,
@@ -128,6 +135,7 @@ export default function ReceiptModal({
 
   if (!isOpen || !transaction) return null;
 
+  const isDebt = transaction.paymentMethod === "DEBT";
   const storeName = storeSettings?.storeName || "TOKOin Warung";
   const address = storeSettings?.address || "Jl. Niaga Raya No. 88, UMKM Central";
   const phone = storeSettings?.phone || "0812-3456-7890";
@@ -138,21 +146,31 @@ export default function ReceiptModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in overflow-y-auto">
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full my-6 overflow-hidden">
           {/* Success Alert Header */}
-          <div className="bg-emerald-600 px-6 py-4 text-white flex items-center justify-between">
+          <div
+            className={`px-6 py-4 text-white flex items-center justify-between ${
+              isDebt ? "bg-amber-600" : "bg-emerald-600"
+            }`}
+          >
             <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-6 h-6 text-white shrink-0" />
+              {isDebt ? (
+                <BookOpen className="w-6 h-6 text-white shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-6 h-6 text-white shrink-0" />
+              )}
               <div>
                 <h3 className="font-extrabold text-base leading-tight">
-                  Transaksi Berhasil Disimpan!
+                  {isDebt ? "Transaksi Kasbon Berhasil Dicatat!" : "Transaksi Berhasil Disimpan!"}
                 </h3>
-                <p className="text-emerald-100 text-xs">
-                  Stok barang telah otomatis diperbarui
+                <p className="text-white/90 text-xs">
+                  {isDebt
+                    ? `Dicatat ke buku kasbon ${transaction.customerName || "Pelanggan"}`
+                    : "Stok barang telah otomatis diperbarui"}
                 </p>
               </div>
             </div>
             <button
               onClick={onNewTransaction}
-              className="p-1 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-700 transition cursor-pointer"
+              className="p-1 rounded-lg text-white/80 hover:text-white hover:bg-black/10 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -166,6 +184,26 @@ export default function ReceiptModal({
               </span>
               <span className="text-xl font-black text-emerald-700">
                 {formatRupiah(transaction.changeAmount)}
+              </span>
+            </div>
+          )}
+
+          {/* Debt Summary Banner if Kasbon */}
+          {isDebt && (
+            <div className="bg-amber-50 px-6 py-3 border-b border-amber-100 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-amber-900 uppercase tracking-wide block">
+                  Sisa Hutang Nota Ini:
+                </span>
+                <span className="text-[11px] text-amber-700 font-medium">
+                  Pelanggan: <strong>{transaction.customerName || "-"}</strong>
+                </span>
+              </div>
+              <span className="text-xl font-black text-amber-900">
+                {formatRupiah(
+                  transaction.debtRemaining ??
+                    transaction.total - transaction.paidAmount
+                )}
               </span>
             </div>
           )}
@@ -246,6 +284,12 @@ export default function ReceiptModal({
                   <span className="text-slate-500">Kasir:</span>
                   <span className="font-semibold">{transaction.cashier.name}</span>
                 </div>
+                {transaction.customerName && (
+                  <div className="flex justify-between text-amber-900 font-bold">
+                    <span>Pelanggan:</span>
+                    <span>{transaction.customerName}</span>
+                  </div>
+                )}
               </div>
 
               {/* Items List */}
@@ -280,23 +324,54 @@ export default function ReceiptModal({
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-black text-slate-900 pt-1 border-t border-slate-200">
-                  <span>TOTAL AKHIR</span>
+                  <span>TOTAL BELANJA</span>
                   <span className="text-emerald-700">{formatRupiah(transaction.total)}</span>
                 </div>
-                <div className="flex justify-between text-slate-600 pt-1">
-                  <span>Metode Pembayaran</span>
-                  <span className="font-bold uppercase">
-                    {transaction.paymentMethod === "CASH" ? "Tunai (Cash)" : "QRIS"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Diterima / Bayar</span>
-                  <span>{formatRupiah(transaction.paidAmount)}</span>
-                </div>
-                <div className="flex justify-between text-slate-900 font-bold">
-                  <span>Kembalian</span>
-                  <span>{formatRupiah(transaction.changeAmount)}</span>
-                </div>
+
+                {isDebt ? (
+                  <>
+                    <div className="flex justify-between text-amber-900 font-bold pt-1">
+                      <span>Metode Bayar</span>
+                      <span className="uppercase">KASBON / HUTANG</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Uang Muka (DP)</span>
+                      <span>{formatRupiah(transaction.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-amber-900 font-black pt-1 border-t border-dashed border-slate-200">
+                      <span>SISA HUTANG NOTA</span>
+                      <span>
+                        {formatRupiah(
+                          transaction.debtRemaining ??
+                            transaction.total - transaction.paidAmount
+                        )}
+                      </span>
+                    </div>
+                    {transaction.totalCustomerDebt !== undefined && (
+                      <div className="flex justify-between text-slate-700 font-bold pt-1 text-[10px]">
+                        <span>Total Kasbon Belum Lunas:</span>
+                        <span>{formatRupiah(transaction.totalCustomerDebt)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-slate-600 pt-1">
+                      <span>Metode Pembayaran</span>
+                      <span className="font-bold uppercase">
+                        {transaction.paymentMethod === "CASH" ? "Tunai (Cash)" : "QRIS"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Diterima / Bayar</span>
+                      <span>{formatRupiah(transaction.paidAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-900 font-bold">
+                      <span>Kembalian</span>
+                      <span>{formatRupiah(transaction.changeAmount)}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Footer Message */}

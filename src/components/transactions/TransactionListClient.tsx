@@ -11,6 +11,7 @@ import {
   Banknote,
   QrCode,
   ShoppingCart,
+  BookOpen,
 } from "lucide-react";
 
 interface TransactionItem {
@@ -31,6 +32,9 @@ interface Transaction {
   paymentMethod: string;
   paidAmount: number;
   changeAmount: number;
+  customerName?: string | null;
+  debtRemaining?: number;
+  customer?: { id: string; name: string } | null;
   status: string;
   cashier: {
     name: string;
@@ -93,10 +97,14 @@ export default function TransactionListClient({
         const q = search.toLowerCase();
         const matchesInvoice = tx.invoiceNumber.toLowerCase().includes(q);
         const matchesCashier = tx.cashier.name.toLowerCase().includes(q);
+        const matchesCustomer =
+          (tx.customerName && tx.customerName.toLowerCase().includes(q)) ||
+          (tx.customer?.name && tx.customer.name.toLowerCase().includes(q));
         const matchesItem = tx.items.some((i) =>
           i.productName.toLowerCase().includes(q)
         );
-        if (!matchesInvoice && !matchesCashier && !matchesItem) return false;
+        if (!matchesInvoice && !matchesCashier && !matchesCustomer && !matchesItem)
+          return false;
       }
 
       return true;
@@ -119,7 +127,11 @@ export default function TransactionListClient({
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Receipt className="w-6 h-6 text-emerald-600" />
-            <span>{isAdmin ? "Riwayat Semua Transaksi Penjualan" : "Riwayat Transaksi Saya"}</span>
+            <span>
+              {isAdmin
+                ? "Riwayat Semua Transaksi Penjualan"
+                : "Riwayat Transaksi Saya"}
+            </span>
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
             Daftar seluruh nota pembayaran, rincian produk yang terjual, dan cetak ulang struk.
@@ -138,67 +150,67 @@ export default function TransactionListClient({
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">
+          <div className="text-2xl font-black text-slate-900 mt-2">
             {formatRupiah(totalRevenue)}
-          </p>
-          <p className="text-xs text-emerald-600 font-semibold mt-0.5">
-            Dari {totalCount} transaksi
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Dari {totalCount} transaksi yang sesuai filter
           </p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Jumlah Transaksi (Struk)
+              Jumlah Transaksi
             </span>
             <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Receipt className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">
-            {totalCount}{" "}
-            <span className="text-sm font-semibold text-slate-500">Struk</span>
-          </p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Status: Selesai (Completed)
-          </p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Rata-rata Nilai Belanja
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <ShoppingCart className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-indigo-600 mt-2">
-            {formatRupiah(averageTicket)}
+          <div className="text-2xl font-black text-slate-900 mt-2">
+            {totalCount} <span className="text-sm font-semibold text-slate-500">Nota</span>
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Total struk belanja berhasil diterbitkan
           </p>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Rata-rata per pelanggan
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Rata-rata per Nota (Basket Size)
+            </span>
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <Receipt className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-black text-slate-900 mt-2">
+            {formatRupiah(averageTicket)}
+          </div>
+          <p className="text-xs text-slate-400 mt-1">
+            Nilai transaksi rata-rata pelanggan
           </p>
         </div>
       </div>
 
-      {/* Filter Controls */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          {/* Search */}
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <Search className="w-4 h-4" />
-            </div>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari no. faktur / nama kasir / nama barang..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+      {/* Search & Filters */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* Search input */}
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+            <Search className="w-4 h-4" />
           </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari no. invoice, nama pelanggan, kasir, atau nama barang..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+          />
+        </div>
 
+        {/* Filters Group */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Date Filter */}
           <select
             value={dateFilter}
@@ -220,6 +232,7 @@ export default function TransactionListClient({
             <option value="ALL">Semua Pembayaran</option>
             <option value="CASH">Hanya Tunai (Cash)</option>
             <option value="QRIS">Hanya QRIS</option>
+            <option value="DEBT">Hanya Kasbon / Utang</option>
           </select>
         </div>
       </div>
@@ -241,7 +254,7 @@ export default function TransactionListClient({
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <th className="py-3.5 px-4">No. Invoice</th>
+                  <th className="py-3.5 px-4">No. Invoice & Pelanggan</th>
                   <th className="py-3.5 px-4">Waktu Transaksi</th>
                   {isAdmin && <th className="py-3.5 px-4">Kasir</th>}
                   <th className="py-3.5 px-4 text-center">Jumlah Barang</th>
@@ -252,12 +265,23 @@ export default function TransactionListClient({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredTransactions.map((tx) => {
-                  const itemCount = tx.items.reduce((acc, curr) => acc + curr.quantity, 0);
+                  const itemCount = tx.items.reduce(
+                    (acc, curr) => acc + curr.quantity,
+                    0
+                  );
+                  const custName = tx.customerName || tx.customer?.name;
 
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-900 text-xs">
-                        {tx.invoiceNumber}
+                      <td className="py-3.5 px-4">
+                        <div className="font-mono font-bold text-slate-900 text-xs">
+                          {tx.invoiceNumber}
+                        </div>
+                        {custName && (
+                          <div className="text-[11px] text-amber-800 font-bold flex items-center gap-1 mt-0.5">
+                            <span>Pelanggan: {custName}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-xs text-slate-500 whitespace-nowrap">
                         {formatDate(tx.createdAt)}
@@ -271,20 +295,22 @@ export default function TransactionListClient({
                         <span className="font-bold text-slate-800">{itemCount}</span> Item
                       </td>
                       <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                            tx.paymentMethod === "CASH"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}
-                        >
-                          {tx.paymentMethod === "CASH" ? (
+                        {tx.paymentMethod === "CASH" ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <Banknote className="w-3.5 h-3.5" />
-                          ) : (
+                            <span>Tunai</span>
+                          </span>
+                        ) : tx.paymentMethod === "QRIS" ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
                             <QrCode className="w-3.5 h-3.5" />
-                          )}
-                          <span>{tx.paymentMethod === "CASH" ? "Tunai" : "QRIS"}</span>
-                        </span>
+                            <span>QRIS</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                            <BookOpen className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Kasbon / Utang</span>
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-right font-black text-slate-900 text-sm">
                         {formatRupiah(tx.total)}

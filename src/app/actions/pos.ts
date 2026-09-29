@@ -3,7 +3,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 
 export interface CartItemInput {
   productId: string;
@@ -16,8 +15,12 @@ export interface CartItemInput {
 export interface CheckoutPayload {
   items: CartItemInput[];
   discount: number;
-  paymentMethod: "CASH" | "QRIS";
+  paymentMethod: "CASH" | "QRIS" | "DEBT";
   paidAmount: number;
+  customerId?: string | null;
+  newCustomerName?: string | null;
+  newCustomerPhone?: string | null;
+  notes?: string | null;
 }
 
 export async function processPosTransaction(payload: CheckoutPayload) {
@@ -26,7 +29,16 @@ export async function processPosTransaction(payload: CheckoutPayload) {
     return { success: false, message: "Sesi kasir telah berakhir. Silakan login kembali." };
   }
 
-  const { items, discount = 0, paymentMethod = "CASH", paidAmount = 0 } = payload;
+  const {
+    items,
+    discount = 0,
+    paymentMethod = "CASH",
+    paidAmount = 0,
+    customerId,
+    newCustomerName,
+    newCustomerPhone,
+    notes,
+  } = payload;
 
   if (!items || items.length === 0) {
     return { success: false, message: "Keranjang belanja kosong." };
@@ -44,6 +56,7 @@ export async function processPosTransaction(payload: CheckoutPayload) {
   const safeDiscount = Math.max(0, Math.min(discount, calculatedSubtotal));
   const calculatedTotal = calculatedSubtotal - safeDiscount;
 
+  // Validation based on payment method
   if (paymentMethod === "CASH" && paidAmount < calculatedTotal) {
     return {
       success: false,
@@ -51,17 +64,72 @@ export async function processPosTransaction(payload: CheckoutPayload) {
     };
   }
 
-  const calculatedChange = paymentMethod === "CASH" ? paidAmount - calculatedTotal : 0;
+  if (paymentMethod === "DEBT" && !customerId && (!newCustomerName || newCustomerName.trim() === "")) {
+    return {
+      success: false,
+      message: "Nama pelanggan wajib diisi atau dipilih untuk transaksi Hutang/Kasbon.",
+    };
+  }
+
+  const safePaidAmount =
+    paymentMethod === "QRIS"
+      ? calculatedTotal
+      : paymentMethod === "DEBT"
+      ? Math.max(0, Math.min(paidAmount, calculatedTotal))
+      : paidAmount;
+
+  const calculatedChange = paymentMethod === "CASH" ? safePaidAmount - calculatedTotal : 0;
+  const debtRemaining = paymentMethod === "DEBT" ? calculatedTotal - safePaidAmount : 0;
+
+  const transactionStatus =
+    paymentMethod === "DEBT"
+      ? safePaidAmount === 0
+        ? "UNPAID"
+        : safePaidAmount >= calculatedTotal
+        ? "COMPLETED"
+        : "PARTIAL"
+      : "COMPLETED";
 
   try {
     const result = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        // 2. Validate real-time stock for all products in a single query
+      async (tx: any) => {
+        // 2. Resolve Customer if DEBT
+        let resolvedCustomerId: string | null = customerId || null;
+        let resolvedCustomerName: string | null = null;
+        let currentCustomerTotalDebt = 0;
+
+        if (paymentMethod === "DEBT") {
+          if (customerId) {
+            const existingCust = await tx.customer.findUnique({
+              where: { id: customerId },
+            });
+            if (!existingCust) {
+              throw new Error("Data pelanggan tidak ditemukan.");
+            }
+            resolvedCustomerId = existingCust.id;
+            resolvedCustomerName = existingCust.name;
+            currentCustomerTotalDebt = existingCust.totalDebt;
+          } else if (newCustomerName && newCustomerName.trim() !== "") {
+            const createdCust = await tx.customer.create({
+              data: {
+                name: newCustomerName.trim(),
+                phone: newCustomerPhone?.trim() || null,
+              },
+            });
+            resolvedCustomerId = createdCust.id;
+            resolvedCustomerName = createdCust.name;
+            currentCustomerTotalDebt = 0;
+          }
+        }
+
+        // 3. Validate real-time stock for all products in a single query
         const productIds = items.map((i) => i.productId);
         const products = await tx.product.findMany({
           where: { id: { in: productIds } },
         });
-        const productMap = new Map(products.map((p) => [p.id, p]));
+        const productMap = new Map<string, any>(
+          products.map((p: any) => [p.id, p])
+        );
 
         for (const item of items) {
           const prod = productMap.get(item.productId);
@@ -77,7 +145,7 @@ export async function processPosTransaction(payload: CheckoutPayload) {
           }
         }
 
-        // 3. Generate Sequential Invoice Number (INV-YYYYMMDD-XXXX)
+        // 4. Generate Sequential Invoice Number (INV-YYYYMMDD-XXXX)
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -99,7 +167,6 @@ export async function processPosTransaction(payload: CheckoutPayload) {
         let sequence = countToday + 1;
         let invoiceNumber = `${datePrefix}-${String(sequence).padStart(4, "0")}`;
 
-        // Ensure absolute uniqueness in concurrent checkout situations
         let existingInvoice = await tx.transaction.findUnique({
           where: { invoiceNumber },
           select: { id: true },
@@ -113,18 +180,21 @@ export async function processPosTransaction(payload: CheckoutPayload) {
           });
         }
 
-        // 4. Create Transaction Record
+        // 5. Create Transaction Record
         const transaction = await tx.transaction.create({
           data: {
             invoiceNumber,
             cashierId: user.id,
+            customerId: resolvedCustomerId,
+            customerName: resolvedCustomerName,
             subtotal: calculatedSubtotal,
             discount: safeDiscount,
             total: calculatedTotal,
             paymentMethod,
-            paidAmount: paymentMethod === "QRIS" ? calculatedTotal : paidAmount,
+            paidAmount: safePaidAmount,
             changeAmount: calculatedChange,
-            status: "COMPLETED",
+            debtRemaining,
+            status: transactionStatus,
             items: {
               create: items.map((i) => ({
                 productId: i.productId,
@@ -137,11 +207,36 @@ export async function processPosTransaction(payload: CheckoutPayload) {
           },
           include: {
             cashier: true,
+            customer: true,
             items: true,
           },
         });
 
-        // 5. Deduct Product Stocks & Record Stock Movements
+        // 6. Update Customer Total Debt & Record DP if applicable
+        let updatedCustomerDebt = currentCustomerTotalDebt;
+        if (paymentMethod === "DEBT" && resolvedCustomerId) {
+          updatedCustomerDebt = currentCustomerTotalDebt + debtRemaining;
+          await tx.customer.update({
+            where: { id: resolvedCustomerId },
+            data: { totalDebt: updatedCustomerDebt },
+          });
+
+          // If Down Payment (DP) paid at POS
+          if (safePaidAmount > 0) {
+            await tx.debtPayment.create({
+              data: {
+                customerId: resolvedCustomerId,
+                transactionId: transaction.id,
+                cashierId: user.id,
+                amount: safePaidAmount,
+                paymentMethod: "CASH",
+                notes: "Uang Muka (DP) saat transaksi kasir",
+              },
+            });
+          }
+        }
+
+        // 7. Deduct Product Stocks & Record Stock Movements
         for (const item of items) {
           const prod = productMap.get(item.productId)!;
           const newStock = prod.stock - item.quantity;
@@ -149,55 +244,60 @@ export async function processPosTransaction(payload: CheckoutPayload) {
             where: { id: item.productId },
             data: { stock: newStock },
           });
-        }
 
-        await tx.stockMovement.createMany({
-          data: items.map((item) => {
-            const prod = productMap.get(item.productId)!;
-            const newStock = prod.stock - item.quantity;
-            return {
+          await tx.stockMovement.create({
+            data: {
               productId: item.productId,
               userId: user.id,
               type: "SALE",
-              quantity: -item.quantity,
+              quantity: item.quantity,
               stockBefore: prod.stock,
               stockAfter: newStock,
               referenceType: "TRANSACTION",
               referenceId: transaction.id,
-              reason: `Penjualan kasir via ${invoiceNumber}`,
-            };
-          }),
+              reason: `Penjualan Kasir POS #${transaction.invoiceNumber}`,
+            },
+          });
+        }
+
+        // 8. Fetch Store Settings for the receipt
+        const storeSettings = await tx.storeSettings.findUnique({
+          where: { id: "default_store" },
         });
 
-        return transaction;
+        return {
+          transaction: {
+            ...transaction,
+            totalCustomerDebt: updatedCustomerDebt,
+          },
+          storeSettings,
+        };
       },
       {
-        maxWait: 10000,
-        timeout: 30000,
+        timeout: 10000,
       }
     );
 
-    // Revalidate paths so dashboard and stock reflect immediate changes
-    revalidatePath("/admin/dashboard");
+    revalidatePath("/pos");
+    revalidatePath("/admin/products");
     revalidatePath("/admin/inventory");
     revalidatePath("/admin/transactions");
-    revalidatePath("/cashier/dashboard");
-    revalidatePath("/cashier/transactions");
-    revalidatePath("/pos");
-
-    const storeSettings = await prisma.storeSettings.findFirst();
+    revalidatePath("/admin/reports");
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/debts");
+    revalidatePath("/cashier/debts");
 
     return {
       success: true,
-      message: "Transaksi berhasil diselesaikan!",
-      transaction: result,
-      storeSettings,
+      transaction: result.transaction,
+      storeSettings: result.storeSettings,
+      message: "Transaksi berhasil diproses!",
     };
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Terjadi kesalahan saat memproses transaksi.";
+  } catch (error: any) {
+    console.error("Error processing POS transaction:", error);
     return {
       success: false,
-      message: msg,
+      message: error.message || "Gagal memproses transaksi kasir.",
     };
   }
 }

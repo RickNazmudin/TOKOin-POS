@@ -20,7 +20,7 @@ export default async function AdminDashboardPage() {
   const todayTransactions = await prisma.transaction.findMany({
     where: {
       createdAt: { gte: today },
-      status: "COMPLETED",
+      status: { not: "CANCELLED" },
     },
   });
 
@@ -243,10 +243,16 @@ export default async function AdminDashboardPage() {
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                               tx.paymentMethod === "CASH"
                                 ? "bg-emerald-100 text-emerald-800"
-                                : "bg-blue-100 text-blue-800"
+                                : tx.paymentMethod === "QRIS"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-amber-100 text-amber-900"
                             }`}
                           >
-                            {tx.paymentMethod === "CASH" ? "Tunai" : "QRIS"}
+                            {tx.paymentMethod === "CASH"
+                              ? "Tunai"
+                              : tx.paymentMethod === "QRIS"
+                              ? "QRIS"
+                              : "Kasbon"}
                           </span>
                         </td>
                         <td className="py-3 text-right font-bold text-slate-900 text-sm">

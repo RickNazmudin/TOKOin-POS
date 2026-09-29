@@ -3,7 +3,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
 
 // 1. Get Products with Filter and Search
 export async function getProducts(options?: {
@@ -13,7 +12,7 @@ export async function getProducts(options?: {
 }) {
   const { query, categoryId, status } = options || {};
 
-  const where: Prisma.ProductWhereInput = {};
+  const where: any = {};
 
   if (status && status !== "ALL") {
     where.status = status;

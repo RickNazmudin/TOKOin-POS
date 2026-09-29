@@ -23,7 +23,7 @@ export default async function CashierDashboardPage() {
     where: {
       cashierId: user.id,
       createdAt: { gte: today },
-      status: "COMPLETED",
+      status: { not: "CANCELLED" },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -131,7 +131,12 @@ export default async function CashierDashboardPage() {
                       {tx.invoiceNumber}
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      {formatDate(tx.createdAt)} &bull; {tx.paymentMethod === "CASH" ? "Tunai" : "QRIS"}
+                      {formatDate(tx.createdAt)} &bull;{" "}
+                      {tx.paymentMethod === "CASH"
+                        ? "Tunai"
+                        : tx.paymentMethod === "QRIS"
+                        ? "QRIS"
+                        : "Kasbon"}
                     </p>
                   </div>
                   <div className="text-right">

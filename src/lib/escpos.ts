@@ -20,6 +20,9 @@ export interface ReceiptData {
   paidAmount: number;
   changeAmount: number;
   cashierName?: string;
+  customerName?: string;
+  debtRemaining?: number;
+  totalCustomerDebt?: number;
   items: ReceiptItemData[];
 }
 
@@ -135,6 +138,8 @@ export function generateReceiptEscPos(
     minute: "2-digit",
   });
 
+  const isDebt = transaction.paymentMethod === "DEBT";
+
   const chunks: (number[] | Uint8Array)[] = [
     CMD_INIT,
     
@@ -160,7 +165,16 @@ export function generateReceiptEscPos(
     CMD_ALIGN_LEFT,
     encodeText(formatTwoColumns("No. Nota:", transaction.invoiceNumber) + "\n"),
     encodeText(formatTwoColumns("Waktu:", dateFormatted) + "\n"),
-    encodeText(formatTwoColumns("Kasir:", transaction.cashierName || "Kasir") + "\n"),
+    encodeText(formatTwoColumns("Kasir:", transaction.cashierName || "Kasir") + "\n")
+  );
+
+  if (transaction.customerName) {
+    chunks.push(
+      encodeText(formatTwoColumns("Pelanggan:", transaction.customerName) + "\n")
+    );
+  }
+
+  chunks.push(
     encodeText(separatorDash),
 
     // Items list
@@ -185,16 +199,45 @@ export function generateReceiptEscPos(
 
   chunks.push(
     CMD_BOLD_ON,
-    encodeText(formatTwoColumns("TOTAL BAYAR:", formatRupiahSimple(transaction.total)) + "\n"),
-    CMD_BOLD_OFF,
-    encodeText(
-      formatTwoColumns(
-        "Metode Bayar:",
-        transaction.paymentMethod === "CASH" ? "TUNAI" : "QRIS"
-      ) + "\n"
-    ),
-    encodeText(formatTwoColumns("Diterima:", formatRupiahSimple(transaction.paidAmount)) + "\n"),
-    encodeText(formatTwoColumns("Kembalian:", formatRupiahSimple(transaction.changeAmount)) + "\n"),
+    encodeText(formatTwoColumns("TOTAL BELANJA:", formatRupiahSimple(transaction.total)) + "\n"),
+    CMD_BOLD_OFF
+  );
+
+  if (isDebt) {
+    chunks.push(
+      encodeText(formatTwoColumns("Metode Bayar:", "KASBON / HUTANG") + "\n"),
+      encodeText(formatTwoColumns("Uang Muka (DP):", formatRupiahSimple(transaction.paidAmount)) + "\n"),
+      CMD_BOLD_ON,
+      encodeText(
+        formatTwoColumns(
+          "SISA HUTANG NOTA:",
+          formatRupiahSimple(transaction.debtRemaining ?? (transaction.total - transaction.paidAmount))
+        ) + "\n"
+      ),
+      CMD_BOLD_OFF
+    );
+
+    if (transaction.totalCustomerDebt !== undefined && transaction.totalCustomerDebt > 0) {
+      chunks.push(
+        encodeText(
+          formatTwoColumns("TOTAL KASBON ANDA:", formatRupiahSimple(transaction.totalCustomerDebt)) + "\n"
+        )
+      );
+    }
+  } else {
+    chunks.push(
+      encodeText(
+        formatTwoColumns(
+          "Metode Bayar:",
+          transaction.paymentMethod === "CASH" ? "TUNAI" : "QRIS"
+        ) + "\n"
+      ),
+      encodeText(formatTwoColumns("Diterima:", formatRupiahSimple(transaction.paidAmount)) + "\n"),
+      encodeText(formatTwoColumns("Kembalian:", formatRupiahSimple(transaction.changeAmount)) + "\n")
+    );
+  }
+
+  chunks.push(
     encodeText(separatorDouble),
 
     // Footer (Center aligned)
@@ -208,6 +251,67 @@ export function generateReceiptEscPos(
   );
 
   return concatByteArrays(...chunks);
+}
+
+/**
+ * Generate ESC/POS binary data for Debt Payment (Kwitansi Pembayaran Kasbon)
+ */
+export function generateDebtPaymentReceiptEscPos(
+  paymentData: {
+    customerName: string;
+    amount: number;
+    paymentMethod: string;
+    remainingDebt: number;
+    cashierName?: string;
+    createdAt: string | Date;
+    notes?: string | null;
+  },
+  storeSettings?: StoreSettingsData | null
+): Uint8Array {
+  const storeName = (storeSettings?.storeName || "TOKOin Warung").toUpperCase();
+  const separator = "=".repeat(MAX_COLS) + "\n";
+  const separatorDash = "-".repeat(MAX_COLS) + "\n";
+
+  const dateObj = new Date(paymentData.createdAt);
+  const dateFormatted = dateObj.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return concatByteArrays(
+    CMD_INIT,
+    CMD_ALIGN_CENTER,
+    CMD_BOLD_ON,
+    encodeText(`${storeName}\n`),
+    encodeText("BUKTI PEMBAYARAN KASBON\n"),
+    CMD_BOLD_OFF,
+    encodeText(separator),
+    CMD_ALIGN_LEFT,
+    encodeText(formatTwoColumns("Waktu:", dateFormatted) + "\n"),
+    encodeText(formatTwoColumns("Kasir:", paymentData.cashierName || "Kasir") + "\n"),
+    encodeText(formatTwoColumns("Pelanggan:", paymentData.customerName) + "\n"),
+    encodeText(separatorDash),
+    CMD_BOLD_ON,
+    encodeText(formatTwoColumns("JUMLAH DIBAYAR:", formatRupiahSimple(paymentData.amount)) + "\n"),
+    CMD_BOLD_OFF,
+    encodeText(formatTwoColumns("Metode Bayar:", paymentData.paymentMethod) + "\n"),
+    encodeText(separatorDash),
+    CMD_BOLD_ON,
+    encodeText(
+      formatTwoColumns("SISA KASBON:", formatRupiahSimple(paymentData.remainingDebt)) + "\n"
+    ),
+    CMD_BOLD_OFF,
+    encodeText(separator),
+    CMD_ALIGN_CENTER,
+    encodeText("Terima kasih telah melunasi kasbon!\n"),
+    CMD_LINE_FEED,
+    CMD_LINE_FEED,
+    CMD_LINE_FEED,
+    CMD_CUT
+  );
 }
 
 /**
