@@ -5,6 +5,8 @@ import { formatRupiah } from "@/lib/utils";
 import { processPosTransaction, type CartItemInput } from "@/app/actions/pos";
 import CheckoutModal from "./CheckoutModal";
 import ReceiptModal from "./ReceiptModal";
+import PrinterSettingsModal from "./PrinterSettingsModal";
+import PrinterStatusBadge from "./PrinterStatusBadge";
 import {
   Search,
   ShoppingCart,
@@ -60,6 +62,7 @@ export default function PosClient({
   // Modals state
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<{
     id: string;
     invoiceNumber: string;
@@ -258,8 +261,8 @@ export default function PosClient({
     <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-6rem)]">
       {/* LEFT COLUMN: Product Catalog & Search */}
       <div className="flex-1 flex flex-col space-y-4">
-        {/* Search Bar & Shortcut Indicator */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-3">
+        {/* Search Bar & Shortcut Indicator & Printer Badge */}
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
               <Search className="w-5 h-5 text-slate-400" />
@@ -279,6 +282,10 @@ export default function PosClient({
                 /
               </kbd>
             </div>
+          </div>
+
+          <div className="shrink-0 flex items-center justify-end">
+            <PrinterStatusBadge onOpenSettings={() => setIsPrinterModalOpen(true)} />
           </div>
         </div>
 
@@ -590,6 +597,12 @@ export default function PosClient({
           setLastTransaction(null);
           searchInputRef.current?.focus();
         }}
+      />
+
+      {/* Printer Settings Modal */}
+      <PrinterSettingsModal
+        isOpen={isPrinterModalOpen}
+        onClose={() => setIsPrinterModalOpen(false)}
       />
     </div>
   );
